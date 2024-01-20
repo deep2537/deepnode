@@ -39,14 +39,13 @@ app.get('/products',async(req,res)=>{
            console.log(allproducts)
            for (x in allproducts)
            {
-            //console.log(x);
-            m=JSON.parse(allproducts[x]) 
-           console.log(m);
-            finalresult[x]=m;
+                m=JSON.parse(allproducts[x]) 
+                console.log(m);
+                finalresult[x]=m;
            }
            console.log("Getting from cache")
            console.log(finalresult)
-           res.json(finalresult);
+           res.send(Object.values(allproducts).map(m=>JSON.parse(m)));
         }
     }
     catch(error){
@@ -106,8 +105,23 @@ app.put('/product/:id', async(req, res) => {
             return res.status(404).json({message: `cannot find any product with ID ${id}`})
         }
         const updatedProduct = await Product.findById(id);
+        let find,m2,x,c=0;
+        find= await redisClient.HGETALL('products1');
+        for (x in find)
+        {
+          m2=JSON.parse(find[x])
+          if(m2["_id"]==id)
+          {
+           await redisClient.HSET('products1',x,JSON.stringify(updatedProduct))
+           c=1;
+           break;
+          }
+        }
+        if(c==1)
+        {
+        console.log(updatedProduct);
+        }
         res.status(200).json(updatedProduct);
-        
     } catch (error) {
         res.status(500).json({message: error.message})
     }
@@ -121,10 +135,10 @@ app.delete('/product/:id', async(req, res) =>{
         }
         let find,m2,x,c=0;
          find= await redisClient.HGETALL('products1');
-         for (x in find)// check in Redis cache to check if it is present or not
+         for (x in find)
          {
            m2=JSON.parse(find[x])
-           if(m2["_id"]==id)// if yes ,then set value to variable product and send a response
+           if(m2["_id"]==id)
            {
             await redisClient.HDEL('products1',x);
             c=1;
@@ -146,6 +160,15 @@ app.post('/product',async(req,res)=>{
     {
         const product = await Product.create(req.body)
         res.status(200).json(product)
+        let count=0,find;
+        find= await redisClient.HGETALL('products1');
+        for (x in find)
+        {
+            count++;
+        } 
+        console.log("Putting in the cache SET cache");
+        var keyname=`product${count}`;
+        await redisClient.HSET('products1',keyname,JSON.stringify(product))
     }
     catch(error){
         console.log(error.message);
